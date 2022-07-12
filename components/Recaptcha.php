@@ -60,11 +60,7 @@ class Recaptcha extends ComponentBase
         $this->model = $model;
         $this->model->rules['g-recaptcha-response'] = ['required'];
 
-        if (isset($this->model->attributeNames)) {
-            $this->model->attributeNames['g-recaptcha-response'] = 'ReCaptcha';
-        } else {
-            $this->model->attributeNames = ['g-recaptcha-response' => 'ReCaptcha'];
-        }
+        $this->model->setValidationAttributeName('g-recaptcha-response', 'ReCaptcha');
     }
 
     public function onCheckRecaptcha()
