@@ -37,14 +37,14 @@ class Recaptcha extends ComponentBase
 
     public function prepareVars()
     {
-        $public = $this->page['site_key'] = Settings::get('site_key', null);
+        $this->page['site_key'] = Settings::get('site_key', null);
         $this->passed = $this->page['recaptcha_passed'] = Session::get('sixgweb.recaptcha.passed', false);
     }
 
     public function bindModel($model)
     {
         $model->bindEvent('model.afterSave', function () {
-            Session::forget('sixgweb.recaptcha.passed');
+            $this->clearSession();
         });
 
         if ($val = post('g-recaptcha-response', null)) {
@@ -58,8 +58,7 @@ class Recaptcha extends ComponentBase
         }
 
         $this->model = $model;
-        $this->model->rules['g-recaptcha-response'] = ['required'];
-
+        $this->model->addValidationRule('g-recaptcha-response', 'required');
         $this->model->setValidationAttributeName('g-recaptcha-response', 'ReCaptcha');
     }
 
@@ -68,6 +67,11 @@ class Recaptcha extends ComponentBase
         if ($this->passed) {
             return ['#recaptchaContainer' => ''];
         }
+    }
+
+    public function clearSession()
+    {
+        Session::forget('sixgweb.recaptcha.passed');
     }
 
     private function check($value)

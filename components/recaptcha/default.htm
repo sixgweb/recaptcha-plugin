@@ -9,7 +9,7 @@
 <script>
     function recaptchaCallback(token)
     {
-        $.request('onCheckRecaptcha', {
+        oc.request(null, 'onCheckRecaptcha', {
             data: {'g-recaptcha-response':token },
         });
     }
