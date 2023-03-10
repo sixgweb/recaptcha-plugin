@@ -1,0 +1,16 @@
+{% set recaptcha_passed = __SELF__.getPassed() %}
+{% set recaptcha_method = __SELF__.getMethod() %}
+{% set recaptcha_size = __SELF__.getSize() %}
+{% set recaptcha_theme = __SELF__.getTheme() %}
+{% set site_key = __SELF__.getSiteKey() %}
+
+{% if not recaptcha_passed %}
+<div id="{{ __SELF__.alias }}RecaptchaContainer">
+    <div 
+        class="g-recaptcha google-recaptcha-v2"
+        data-sitekey="{{ site_key }}" 
+        data-size="{{ recaptcha_size }}" 
+        data-theme="{{ recaptcha_theme }}"
+    ></div>
+</div>
+{% endif %}

@@ -2,8 +2,9 @@
 
 namespace Sixgweb\Recaptcha\Components;
 
-use Session;
+use Config;
 use Request;
+use ApplicationException;
 use ReCaptcha\ReCaptcha as RecaptchaValidator;
 use Cms\Classes\ComponentBase;
 use Sixgweb\Recaptcha\Models\Settings;
@@ -15,41 +16,93 @@ class Recaptcha extends ComponentBase
 {
     protected $model;
     protected $passed = false;
+    protected $version;
+    protected $method;
+    protected $size;
+    protected $theme;
+    protected $sitekey;
+    protected $errorCodes = [];
 
-    public function componentDetails()
+    /**
+     * Component Details
+     *
+     * @return array
+     */
+    public function componentDetails(): array
     {
         return [
             'name' => 'Recaptcha Component',
-            'description' => 'No description provided yet...'
+            'description' => 'Google Recaptcha v2 and v3'
         ];
     }
 
-    public function defineProperties()
+    /**
+     * Component Properties
+     *
+     * @return array
+     */
+    public function defineProperties(): array
     {
         return [];
     }
 
-    public function init()
+    /**
+     * Component initialized
+     *
+     * @return void
+     */
+    public function init(): void
     {
-        $this->addJs('https://www.google.com/recaptcha/api.js?hl=en');
         $this->prepareVars();
+        $this->addScripts();
     }
 
-    public function prepareVars()
+    /**
+     * Prepare page variables and component properties
+     *
+     * @return void
+     */
+    public function prepareVars(): void
     {
-        $this->page['site_key'] = Settings::get('site_key', null);
-        $this->passed = $this->page['recaptcha_passed'] = Session::get('sixgweb.recaptcha.passed', false);
+        $this->version = Settings::get('version', 'v2');
+        $this->method = Settings::get('method', 'checkbox');
+        $this->theme = Settings::get('theme', 'light');
+        $this->size = $this->method == 'invisible' ? 'invisible' : Settings::get('size', 'normal');
+        $this->sitekey = Settings::get('site_key');
     }
 
-    public function bindModel($model)
+    /**
+     * Add reCaptcha scripts
+     *
+     * @return void
+     */
+    public function addScripts(): void
     {
-        $model->bindEvent('model.afterSave', function () {
-            $this->clearSession();
-        });
+        if ($this->passed || $this->getVersion() == 'v3') {
+            return;
+        }
 
+        $this->addJs('assets/js/recaptcha.js'); //comes first so onload callback is found
+        $this->addJs('https://www.google.com/recaptcha/api.js?onload=recaptchaOnLoad');
+    }
+
+    /**
+     * Add events and validation rules to integrated model
+     *
+     * @param [type] $model
+     * @return void
+     */
+    public function bindModel($model): void
+    {
         if ($val = post('g-recaptcha-response', null)) {
-            if ($this->check($val)) {
+            if ($this->checkRecaptcha($val)) {
                 return;
+            } else {
+                if ($this->getVersion() == 'v2') {
+                    throw new ApplicationException('ReCaptcha Response Invalid.' . implode(' | ', $this->errorCodes));
+                } else {
+                    throw new ApplicationException('ReCaptcha Score Too Low');
+                }
             }
         }
 
@@ -62,22 +115,109 @@ class Recaptcha extends ComponentBase
         $this->model->setValidationAttributeName('g-recaptcha-response', 'ReCaptcha');
     }
 
-    public function onCheckRecaptcha()
+    /**
+     * Override ComponentBase, always returning Recaptcha/Components/Recaptcha path
+     * for subclasses.
+     *
+     * @return string
+     */
+    public function getPath(): string
     {
-        if ($this->passed) {
-            return ['#recaptchaContainer' => ''];
+        $dirName = '/' . strtolower(str_replace('\\', '/', Recaptcha::class));
+        return plugins_path() . $dirName;
+    }
+
+    /**
+     * Get recaptcha site key
+     *
+     * @return string
+     */
+    public function getSiteKey(): string
+    {
+        return $this->sitekey;
+    }
+
+    /**
+     * Get recaptcha version
+     *
+     * @return string
+     */
+    public function getVersion(): string
+    {
+        return $this->version;
+    }
+
+    /**
+     * Get v2 method
+     *
+     * @return string
+     */
+    public function getMethod(): string
+    {
+        return $this->method;
+    }
+
+    /**
+     * Get v2 theme
+     *
+     * @return string
+     */
+    public function getTheme(): string
+    {
+        return $this->theme;
+    }
+
+    /**
+     * Get v2 size
+     *
+     * @return string
+     */
+    public function getSize(): string
+    {
+        return $this->size;
+    }
+
+    /**
+     * Get recaptcha passed
+     *
+     * @return string
+     */
+    public function getPassed(): bool
+    {
+        return $this->passed;
+    }
+
+    /**
+     * Override ComponentBase, always returning Recaptcha/Components/Recaptcha path
+     * for subclasses.
+     *
+     * @return string
+     */
+    protected function getComponentAssetPath(): string
+    {
+        $assetUrl = Config::get('system.plugins_asset_url');
+
+        if (!$assetUrl) {
+            $assetUrl = Config::get('app.asset_url') . '/plugins';
         }
+        $dirName = '/' . strtolower(str_replace('\\', '/', Recaptcha::class));
+        return $assetUrl . dirname(dirname($dirName));
     }
 
-    public function clearSession()
-    {
-        Session::forget('sixgweb.recaptcha.passed');
-    }
-
-    private function check($value)
+    /**
+     * Set passed property, captcha_errors and return boolean
+     *
+     * @param [type] $value
+     * @return boolean
+     */
+    public function checkRecaptcha($value): bool
     {
         $ip = Request::ip();
         $recaptcha = new RecaptchaValidator(Settings::get('secret_key'));
+
+        if ($this->getVersion() == 'v3') {
+            $recaptcha = $recaptcha->setScoreThreshold(Settings::get('score', 0.5));
+        }
 
         $response = $recaptcha->verify(
             $value,
@@ -85,11 +225,10 @@ class Recaptcha extends ComponentBase
         );
 
         if ($response->isSuccess()) {
-            Session::put('sixgweb.recaptcha.passed', 1);
-            $this->passed = $this->page['recaptcha_passed'] = true;
-            return true;
+            $this->passed = true;
+            return $this->passed;
         } else {
-            $this->page['captcha_error'] = 'reCAPTCHA error' . ': ' . implode(' / ', $response->getErrorCodes());
+            $this->errorCodes = $response->getErrorCodes();
             return false;
         }
     }

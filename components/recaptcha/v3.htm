@@ -1,0 +1,11 @@
+{% set site_key = __SELF__.getSiteKey() %}
+
+<div id="{{ __SELF__.alias }}RecaptchaContainer">
+    <div 
+        id="{{ __SELF__.alias }}Recaptcha" 
+        class="g-recaptcha google-recaptcha-v3" 
+        data-alias="{{ __SELF__.alias }}"
+        data-site-key="{{ site_key }}">
+        <textarea name="g-recaptcha-response" id="g-recaptcha-response" style="display:none" autocomplete="off"></textarea>
+    </div>
+</div>

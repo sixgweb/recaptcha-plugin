@@ -1,0 +1,8 @@
+{% if captcha_errors|length %}
+    <div class="text-bg-danger p-3 form-group">
+        <div class="h5">reCaptcha Errors</div>
+        {% for captcha_error in captcha_errors %}
+            {{ captcha_error }}
+        {% endfor %}
+    </div>
+{% endif %}

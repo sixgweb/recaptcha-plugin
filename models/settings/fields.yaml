@@ -3,9 +3,73 @@
 # ===================================
 
 fields:
+    _intro:
+        type: section
+        label: Instructions
+        comment: <div>Visit <a href="https://www.google.com/recaptcha" target="_blank">Google reCaptcha</a> to obtain keys</div>
+        commentHtml: true
+            
+    version:
+        label: Version
+        type: dropdown
+        default: v2
+        options:
+            v2: v2
+            v3: v3
+
+    score:
+        label: Required Score
+        type: number
+        default: 0.5
+        max: 1
+        min: 0.1
+        step: 0.1
+        attributes:
+            step: 0.1
+        trigger:
+            field: version
+            condition: value[v3]
+            action: show
+
+    method:
+        label: Method
+        type: dropdown
+        options:
+            checkbox: Checkbox
+            invisible: Invisible
+        trigger:
+            field: version
+            action: show
+            condition: value[v2]
+
+    theme:
+        label: Theme
+        type: dropdown
+        options:
+            light: Light
+            dark: Dark
+        trigger:
+            field: method
+            action: show
+            condition: value[checkbox]
+        dependsOn: version
+
+    size:
+        label: Size
+        type: dropdown
+        options:
+            compact: Compact
+            normal: Normal
+        trigger:
+            field: method
+            action: show
+            condition: value[checkbox]
+        dependsOn: version
+            
     site_key:
         span: auto
         label: Site Key
+
     secret_key:
         span: auto
         label: Secret Key

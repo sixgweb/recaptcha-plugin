@@ -2,8 +2,11 @@
 
 namespace Sixgweb\Recaptcha;
 
+use App;
+use Event;
 use Backend;
 use System\Classes\PluginBase;
+use Sixgweb\Recaptcha\Models\Settings;
 
 /**
  * Recaptcha Plugin Information File
@@ -41,6 +44,7 @@ class Plugin extends PluginBase
      */
     public function boot()
     {
+        $this->addV3Scripts();
     }
 
     public function registerSettings()
@@ -50,7 +54,7 @@ class Plugin extends PluginBase
                 'label' => 'ReCaptcha',
                 'description' => 'ReCaptcha Site/Secret Keys',
                 'icon' => 'icon-lock',
-                'category' => 'ReCaptcha',
+                'category' => 'Sixgweb',
                 'class' => 'Sixgweb\Recaptcha\Models\Settings',
                 'permissions' => ['sixgweb.recaptcha.access_settings'],
             ]
@@ -59,8 +63,16 @@ class Plugin extends PluginBase
 
     public function registerComponents()
     {
+        /**
+         * We want the Fields component available on the frontend but not listed
+         * in the Editor component popup, so we only return on the frontend.
+         */
+        if (App::runningInBackend()) {
+            return [];
+        }
+
         return [
-            'Sixgweb\Recaptcha\Components\Recaptcha' => 'recaptcha',
+            'Sixgweb\Recaptcha\Components\Recaptcha' => 'recaptchaBase',
         ];
     }
 
@@ -99,5 +111,16 @@ class Plugin extends PluginBase
                 'order'       => 500,
             ],
         ];
+    }
+
+    protected function addV3Scripts(): void
+    {
+        if (Settings::get('version', 'v2') == 'v3') {
+            Event::listen('cms.page.beforeDisplay', function ($controller) {
+                $controller->addJS('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
+                $query = '?onload=recaptchaOnLoad&render=' . Settings::get('site_key');
+                $controller->addJs('https://www.google.com/recaptcha/api.js' . $query);
+            });
+        }
     }
 }
