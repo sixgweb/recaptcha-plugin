@@ -5,7 +5,7 @@
 {% set site_key = __SELF__.getSiteKey() %}
 
 {% if not recaptcha_passed %}
-<div id="{{ __SELF__.alias }}RecaptchaContainer">
+<div id="{{ __SELF__.alias }}RecaptchaContainer" class="{{ __SELF__.property('wrapperClass') }}">
     <div 
         class="g-recaptcha google-recaptcha-v2"
         data-sitekey="{{ site_key }}" 

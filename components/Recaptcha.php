@@ -43,7 +43,14 @@ class Recaptcha extends ComponentBase
      */
     public function defineProperties(): array
     {
-        return [];
+        return [
+            'wrapperClass' => [
+                'title' => 'Wrapper Class',
+                'description' => 'CSS class for wrapper',
+                'type' => 'string',
+                'showExternalParam' => false
+            ],
+        ];
     }
 
     /**
