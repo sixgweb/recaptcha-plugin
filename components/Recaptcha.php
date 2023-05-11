@@ -101,8 +101,8 @@ class Recaptcha extends ComponentBase
      */
     public function bindModel($model): void
     {
-        if ($val = post('g-recaptcha-response', null)) {
-            if ($this->checkRecaptcha($val)) {
+        $model->bindEvent('model.afterValidate', function () use ($model) {
+            if ($this->checkRecaptcha(post('g-recaptcha-response', null))) {
                 return;
             } else {
                 if ($this->getVersion() == 'v2') {
@@ -111,15 +111,7 @@ class Recaptcha extends ComponentBase
                     throw new ApplicationException('ReCaptcha Score Too Low');
                 }
             }
-        }
-
-        if ($this->passed) {
-            return;
-        }
-
-        $this->model = $model;
-        $this->model->addValidationRule('g-recaptcha-response', 'required');
-        $this->model->setValidationAttributeName('g-recaptcha-response', 'ReCaptcha');
+        });
     }
 
     /**
@@ -219,6 +211,11 @@ class Recaptcha extends ComponentBase
      */
     public function checkRecaptcha($value): bool
     {
+        //For events firing more than once
+        if ($this->passed) {
+            return true;
+        }
+
         $ip = Request::ip();
         $recaptcha = new RecaptchaValidator(Settings::get('secret_key'));
 
