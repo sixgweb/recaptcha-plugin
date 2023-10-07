@@ -102,11 +102,14 @@ class Recaptcha extends ComponentBase
     public function bindModel($model): void
     {
         $model->bindEvent('model.afterValidate', function () use ($model) {
-            if ($this->checkRecaptcha(post('g-recaptcha-response', null))) {
+            if (!$response = post('g-recaptcha-response', null)) {
+                throw new ApplicationException('Please complete the reCaptcha challenge before submitting the form.');
+            }
+            if ($this->checkRecaptcha($response)) {
                 return;
             } else {
                 if ($this->getVersion() == 'v2') {
-                    throw new ApplicationException('ReCaptcha Response Invalid.' . implode(' | ', $this->errorCodes));
+                    throw new ApplicationException('ReCaptcha Response Invalid.  Code:' . implode(' | ', $this->errorCodes));
                 } else {
                     throw new ApplicationException('ReCaptcha Score Too Low');
                 }
