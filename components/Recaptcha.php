@@ -2,6 +2,8 @@
 
 namespace Sixgweb\Recaptcha\Components;
 
+use Model;
+use Event;
 use Config;
 use Request;
 use ApplicationException;
@@ -85,7 +87,7 @@ class Recaptcha extends ComponentBase
      */
     public function addScripts(): void
     {
-        if ($this->passed || $this->getVersion() == 'v3') {
+        if ($this->getPassed() || $this->getVersion() == 'v3') {
             return;
         }
 
@@ -101,10 +103,17 @@ class Recaptcha extends ComponentBase
      */
     public function bindModel($model): void
     {
+        $this->model = $model;
+
         $model->bindEvent('model.afterValidate', function () use ($model) {
+            if ($this->getPassed()) {
+                return;
+            }
+
             if (!$response = post('g-recaptcha-response', null)) {
                 throw new ApplicationException('Please complete the reCaptcha challenge before submitting the form.');
             }
+
             if ($this->checkRecaptcha($response)) {
                 return;
             } else {
@@ -189,6 +198,22 @@ class Recaptcha extends ComponentBase
         return $this->passed;
     }
 
+    public function getModel(): ?Model
+    {
+        return $this->model;
+    }
+
+    /**
+     * Set passed property
+     *
+     * @param boolean $passed
+     * @return void
+     */
+    public function setPassed(bool $passed): void
+    {
+        $this->passed = $passed;
+    }
+
     /**
      * Override ComponentBase, always returning Recaptcha/Components/Recaptcha path
      * for subclasses.
@@ -215,7 +240,7 @@ class Recaptcha extends ComponentBase
     public function checkRecaptcha($value): bool
     {
         //For events firing more than once
-        if ($this->passed) {
+        if ($this->getPassed()) {
             return true;
         }
 
@@ -232,8 +257,9 @@ class Recaptcha extends ComponentBase
         );
 
         if ($response->isSuccess()) {
-            $this->passed = true;
-            return $this->passed;
+            $this->setPassed(true);
+            Event::fire('sixgweb.recaptcha.passed', [$this]);
+            return true;
         } else {
             $this->errorCodes = $response->getErrorCodes();
             return false;
