@@ -6,7 +6,7 @@ use Model;
 use Event;
 use Config;
 use Request;
-use ApplicationException;
+use ValidationException;
 use ReCaptcha\ReCaptcha as RecaptchaValidator;
 use Cms\Classes\ComponentBase;
 use Sixgweb\Recaptcha\Models\Settings;
@@ -111,16 +111,16 @@ class Recaptcha extends ComponentBase
             }
 
             if (!$response = post('g-recaptcha-response', null)) {
-                throw new ApplicationException('Please complete the reCaptcha challenge before submitting the form.');
+                throw new ValidationException([0 => 'Please complete the reCaptcha challenge before submitting the form.']);
             }
 
             if ($this->checkRecaptcha($response)) {
                 return;
             } else {
                 if ($this->getVersion() == 'v2') {
-                    throw new ApplicationException('ReCaptcha Response Invalid.  Code:' . implode(' | ', $this->errorCodes));
+                    throw new ValidationException([0 => 'ReCaptcha Response Invalid.  Code:' . implode(' | ', $this->errorCodes)]);
                 } else {
-                    throw new ApplicationException('ReCaptcha Score Too Low');
+                    throw new ValidationException([0 => 'ReCaptcha Score Too Low']);
                 }
             }
         });

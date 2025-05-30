@@ -26,20 +26,31 @@ abstract class AbstractEventHandler
         }
 
         $this->componentClass::extend(function ($component) {
+            Event::listen('cms.component.beforeRunAjaxHandler', function ($component) {
+                $this->findAndBindRecaptchaComponent($component);
+            });
 
-            //By deferring the addComponent to the controller event, we give other plugins the opportunity
-            //to manipulate the field models
-            $component->getController()->bindEvent('page.initComponents', function ($page, $layout) use ($component) {
-                $find = $this->getRecaptchaComponentClass();
-                $recaptchaComponent = array_first($page->components, function ($pageComponent) use ($find) {
-                    return get_class($pageComponent) == $find;
-                });
-
-                if ($recaptchaComponent) {
-                    $recaptchaComponent->bindModel($this->getComponentModel($component));
-                }
+            $component->bindEvent('component.beforeRun', function () use ($component) {
+                $this->findAndBindRecaptchaComponent($component);
             });
         });
+    }
+
+    protected function findAndBindRecaptchaComponent($component): void
+    {
+        $find = $this->getRecaptchaComponentClass();
+        $page = $component->getPage();
+        $recaptchaComponent = array_first($page->components, function ($pageComponent) use ($find) {
+            return get_class($pageComponent) == $find;
+        });
+
+        if (!$recaptchaComponent) {
+            $recaptchaComponent = $component->addComponent($find, 'recaptchaAliased');
+        }
+
+        if ($recaptchaComponent) {
+            $recaptchaComponent->bindModel($this->getComponentModel($component));
+        }
     }
 
     /**
