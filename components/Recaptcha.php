@@ -6,6 +6,7 @@ use Model;
 use Event;
 use Config;
 use Request;
+use Session;
 use ValidationException;
 use ReCaptcha\ReCaptcha as RecaptchaValidator;
 use Cms\Classes\ComponentBase;
@@ -52,6 +53,13 @@ class Recaptcha extends ComponentBase
                 'type' => 'string',
                 'showExternalParam' => false
             ],
+            'useSession' => [
+                'title' => 'Use Session',
+                'description' => 'Store reCaptcha result in session',
+                'type' => 'checkbox',
+                'default' => true,
+                'showExternalParam' => false
+            ],
         ];
     }
 
@@ -91,7 +99,7 @@ class Recaptcha extends ComponentBase
             return;
         }
 
-        $this->addJs('assets/js/recaptcha.js'); //comes first so onload callback is found
+        $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
         $this->addJs('https://www.google.com/recaptcha/api.js?onload=recaptchaOnLoad');
     }
 
@@ -124,6 +132,13 @@ class Recaptcha extends ComponentBase
                 }
             }
         });
+    }
+
+    public function onCheckRecaptcha()
+    {
+        if ($response = post('g-recaptcha-response', null)) {
+            return $this->checkRecaptcha($response) ? ['recaptchaId' => $this->alias . 'RecaptchaContainer'] : false;
+        }
     }
 
     /**
@@ -195,6 +210,9 @@ class Recaptcha extends ComponentBase
      */
     public function getPassed(): bool
     {
+        if ($this->property('useSession') && Session::has($this->getSessionKey())) {
+            $this->passed = true;
+        }
         return $this->passed;
     }
 
@@ -211,7 +229,12 @@ class Recaptcha extends ComponentBase
      */
     public function setPassed(bool $passed): void
     {
+        Session::forget($this->getSessionKey());
         $this->passed = $passed;
+
+        if ($this->property('useSession')) {
+            Session::put($this->getSessionKey(), 1);
+        }
     }
 
     /**
@@ -228,6 +251,7 @@ class Recaptcha extends ComponentBase
             $assetUrl = Config::get('app.asset_url') . '/plugins';
         }
         $dirName = '/' . strtolower(str_replace('\\', '/', Recaptcha::class));
+        exit('here');
         return $assetUrl . dirname(dirname($dirName));
     }
 
@@ -264,5 +288,10 @@ class Recaptcha extends ComponentBase
             $this->errorCodes = $response->getErrorCodes();
             return false;
         }
+    }
+
+    protected function getSessionKey()
+    {
+        return strtolower(str_replace('\\', '.', get_class($this))) . '.passed';
     }
 }

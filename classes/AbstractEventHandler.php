@@ -27,7 +27,9 @@ abstract class AbstractEventHandler
 
         $this->componentClass::extend(function ($component) {
             Event::listen('cms.component.beforeRunAjaxHandler', function ($component) {
-                $this->findAndBindRecaptchaComponent($component);
+                if ($component instanceof $this->componentClass) {
+                    $this->findAndBindRecaptchaComponent($component);
+                }
             });
 
             $component->bindEvent('component.beforeRun', function () use ($component) {

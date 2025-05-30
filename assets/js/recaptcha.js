@@ -35,6 +35,20 @@ var recaptchaOnLoad = () => {
     });
 };
 
+var passedCallback = (token) => {
+    oc.ajax('onCheckRecaptcha', {
+        data: {
+            'g-recaptcha-response': token
+        },
+        success: function (data) {
+            if (typeof data.recaptchaId != 'undefined') {
+                document.getElementById(data.recaptchaId).remove();
+            }
+            this.success(data);
+        },
+    });
+};
+
 var recaptchaCallback = (token) => {
     let input = document.querySelector('#g-recaptcha-response');
     let recaptcha = input ? input.closest('.g-recaptcha') : null;
