@@ -132,12 +132,18 @@ class Recaptcha extends ComponentBase
                 }
             }
         });
+
+        $model->bindEvent('model.afterSave', function () use ($model) {
+            Session::forget($this->getSessionKey());
+        });
     }
 
     public function onCheckRecaptcha()
     {
         if ($response = post('g-recaptcha-response', null)) {
-            return $this->checkRecaptcha($response) ? ['recaptchaId' => $this->alias . 'RecaptchaContainer'] : false;
+            if ($this->property('useSession')) {
+                return $this->checkRecaptcha($response) ? ['recaptchaId' => $this->alias . 'RecaptchaContainer'] : false;
+            }
         }
     }
 
