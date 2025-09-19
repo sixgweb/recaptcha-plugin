@@ -42,9 +42,16 @@ abstract class AbstractEventHandler
     {
         $find = $this->getRecaptchaComponentClass();
         $page = $component->getPage();
-        $recaptchaComponent = array_first($page->components, function ($pageComponent) use ($find) {
-            return get_class($pageComponent) == $find;
-        });
+        $recaptchaComponent = null;
+
+        //Loop through page components to find the integration fields component
+        foreach ($page->components as $pageComponent) {
+            if (get_class($pageComponent) == $find) {
+                $recaptchaComponent = $pageComponent;
+                break;
+            }
+        }
+
 
         if (!$recaptchaComponent) {
             $recaptchaComponent = $component->addComponent($find, 'recaptchaAliased');
