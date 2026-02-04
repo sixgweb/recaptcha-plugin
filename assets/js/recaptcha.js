@@ -10,6 +10,7 @@ var recaptchaOnLoad = () => {
     let recaptchas = document.querySelectorAll('.g-recaptcha');
     recaptchas.forEach((recaptcha) => {
         let form = recaptcha.closest('form');
+        recaptcha.dataset.recaptchaLoaded = true;
         if (form) {
             form.addEventListener('submit', (e) => {
                 if (isInvisibleRecaptcha(recaptcha) || isRecaptchaV3(recaptcha)) {
@@ -70,3 +71,19 @@ var recaptchaCallback = (token) => {
         }
     }
 }
+
+(() => {
+    addEventListener('page:updated', () => {
+        document.querySelectorAll('.g-recaptcha').forEach((recaptcha) => {
+            if (recaptcha.dataset.recaptchaLoaded != true) {
+                grecaptcha.render(recaptcha, {
+                    'sitekey': recaptcha.dataset.sitekey,
+                    'size': recaptcha.dataset.size,
+                    'theme': recaptcha.dataset.theme,
+                    'callback': recaptcha.dataset.callback
+                });
+                recaptcha.dataset.recaptchaLoaded = true;
+            }
+        });
+    });
+})();
