@@ -1,1 +1,17 @@
 {% partial '::' ~ __SELF__.getVersion() %}
+
+<script>
+var passedCallback{{ __SELF__.alias }} = (token) => {
+    oc.ajax('{{ __SELF__.alias ~ '::onCheckRecaptcha' }}', {
+        data: {
+            'g-recaptcha-response': token
+        },
+        success: function (data) {
+            if (typeof data.recaptchaId != 'undefined') {
+                document.getElementById(data.recaptchaId).remove();
+            }
+            this.success(data);
+        },
+    });
+};
+</script>
