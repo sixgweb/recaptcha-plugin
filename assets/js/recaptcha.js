@@ -10,6 +10,7 @@ var recaptchaOnLoad = () => {
     let recaptchas = document.querySelectorAll('.g-recaptcha');
     recaptchas.forEach((recaptcha) => {
         let form = recaptcha.closest('form');
+        recaptcha.dataset.recaptchaLoaded = true;
         if (form) {
             form.addEventListener('submit', (e) => {
                 if (isInvisibleRecaptcha(recaptcha) || isRecaptchaV3(recaptcha)) {

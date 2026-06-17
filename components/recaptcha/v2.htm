@@ -9,9 +9,26 @@
     <div 
         class="g-recaptcha google-recaptcha-v2"
         data-sitekey="{{ site_key }}" 
-        data-callback="passedCallback"
+        data-callback="passedCallback{{ __SELF__.alias }}"
         data-size="{{ recaptcha_size }}" 
         data-theme="{{ recaptcha_theme }}"
+        data-alias="{{ __SELF__.alias }}"
     ></div>
 </div>
 {% endif %}
+
+<script>
+var passedCallback{{ __SELF__.alias }} = (token) => {
+    oc.ajax('{{ __SELF__.alias ~ '::onCheckRecaptcha' }}', {
+        data: {
+            'g-recaptcha-response': token
+        },
+        success: function (data) {
+            if (typeof data.recaptchaId != 'undefined') {
+                document.getElementById(data.recaptchaId).remove();
+            }
+            this.success(data);
+        },
+    });
+};
+</script>
