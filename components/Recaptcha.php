@@ -257,7 +257,7 @@ class Recaptcha extends ComponentBase
             $assetUrl = Config::get('app.asset_url') . '/plugins';
         }
         $dirName = '/' . strtolower(str_replace('\\', '/', Recaptcha::class));
-        exit('here');
+
         return $assetUrl . dirname(dirname($dirName));
     }
 
