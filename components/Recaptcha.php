@@ -99,7 +99,7 @@ class Recaptcha extends ComponentBase
             return;
         }
 
-        if (version_compare(\System::VERSION, '3', '<=')) {
+        if (version_compare(\System::VERSION, '3.0', '>=') && version_compare(\System::VERSION, '4.0', '<')) {
             $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha-oc3.js');
         } else {
             $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
