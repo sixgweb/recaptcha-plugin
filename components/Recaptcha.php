@@ -99,7 +99,11 @@ class Recaptcha extends ComponentBase
             return;
         }
 
-        $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
+        if (version_compare(\System::VERSION, '3', '<=')) {
+            $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha-oc3.js');
+        } else {
+            $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
+        }
         $this->addJs('https://www.google.com/recaptcha/api.js?onload=recaptchaOnLoad');
     }
 

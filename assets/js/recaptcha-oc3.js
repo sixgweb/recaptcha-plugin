@@ -1,0 +1,89 @@
+var isInvisibleRecaptcha = (el) => {
+    return 'size' in el.dataset && el.dataset.size == 'invisible';
+}
+
+var isRecaptchaV3 = (el) => {
+    return el.classList.contains('google-recaptcha-v3');
+}
+
+var recaptchaOnLoad = () => {
+    let recaptchas = document.querySelectorAll('.g-recaptcha');
+    recaptchas.forEach((recaptcha) => {
+        let form = recaptcha.closest('form');
+        recaptcha.dataset.recaptchaLoaded = true;
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                if (isInvisibleRecaptcha(recaptcha) || isRecaptchaV3(recaptcha)) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    e.stopPropagation();
+                    if (isRecaptchaV3(recaptcha)) {
+                        let action = form.dataset.request ?? 'submit';
+                        action = action.replace(/[^a-z]/gi, '');
+                        grecaptcha.execute(
+                            recaptcha.dataset.siteKey,
+                            { action: action }
+                        ).then((token) => {
+                            recaptchaCallback(token);
+                        });
+                    } else {
+                        grecaptcha.execute();
+                    }
+                    return false;
+                }
+            });
+        }
+    });
+};
+
+var passedCallback = (token) => {
+    oc.ajax('onCheckRecaptcha', {
+        data: {
+            'g-recaptcha-response': token
+        },
+        success: function (data) {
+            if (typeof data.recaptchaId != 'undefined') {
+                document.getElementById(data.recaptchaId).remove();
+            }
+            this.success(data);
+        },
+    });
+};
+
+var recaptchaCallback = (token) => {
+    let input = document.querySelector('#g-recaptcha-response');
+    let recaptcha = input ? input.closest('.g-recaptcha') : null;
+    let form = recaptcha ? recaptcha.closest('form') : null;
+
+    if (input) {
+        input.value = token;
+    }
+
+    if (
+        recaptcha &&
+        form &&
+        (isInvisibleRecaptcha(recaptcha) || isRecaptchaV3(recaptcha))
+    ) {
+        if ('request' in form.dataset) {
+            oc.request(form, form.dataset.request);
+        } else {
+            form.submit();
+        }
+    }
+}
+
+(() => {
+    addEventListener('page:render', () => {
+        document.querySelectorAll('.g-recaptcha').forEach((recaptcha) => {
+            if (recaptcha.dataset.recaptchaLoaded != true) {
+                grecaptcha.render(recaptcha, {
+                    'sitekey': recaptcha.dataset.sitekey,
+                    'size': recaptcha.dataset.size,
+                    'theme': recaptcha.dataset.theme,
+                    'callback': recaptcha.dataset.callback
+                });
+                recaptcha.dataset.recaptchaLoaded = true;
+            }
+        });
+    });
+})();
