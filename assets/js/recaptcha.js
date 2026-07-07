@@ -72,18 +72,26 @@ var recaptchaCallback = (token) => {
     }
 }
 
+var ajaxRenderCallback = () => {
+    document.querySelectorAll('.g-recaptcha').forEach((recaptcha) => {
+        if (recaptcha.dataset.recaptchaLoaded != true) {
+            grecaptcha.render(recaptcha, {
+                'sitekey': recaptcha.dataset.sitekey,
+                'size': recaptcha.dataset.size,
+                'theme': recaptcha.dataset.theme,
+                'callback': recaptcha.dataset.callback
+            });
+            recaptcha.dataset.recaptchaLoaded = true;
+        }
+    });
+}
+
 (() => {
     addEventListener('page:render', () => {
-        document.querySelectorAll('.g-recaptcha').forEach((recaptcha) => {
-            if (recaptcha.dataset.recaptchaLoaded != true) {
-                grecaptcha.render(recaptcha, {
-                    'sitekey': recaptcha.dataset.sitekey,
-                    'size': recaptcha.dataset.size,
-                    'theme': recaptcha.dataset.theme,
-                    'callback': recaptcha.dataset.callback
-                });
-                recaptcha.dataset.recaptchaLoaded = true;
-            }
-        });
+        ajaxRenderCallback();
+    });
+
+    addEventListener('render', () => {
+        ajaxRenderCallback();
     });
 })();
