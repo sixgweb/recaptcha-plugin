@@ -32,6 +32,12 @@ abstract class AbstractEventHandler
                 }
             });
 
+            Event::listen('cms.ajax.beforeRunHandler', function ($controller, $handler) use ($component) {
+                if ($component instanceof $this->componentClass) {
+                    $this->findAndBindRecaptchaComponent($component);
+                }
+            });
+
             $component->bindEvent('component.beforeRun', function () use ($component) {
                 $this->findAndBindRecaptchaComponent($component);
             });
@@ -52,13 +58,18 @@ abstract class AbstractEventHandler
             }
         }
 
-
+        //No recaptcha component found on the page, add it dynamically
         if (!$recaptchaComponent) {
-            $recaptchaComponent = $component->addComponent($find, 'recaptchaAliased');
+            $recaptchaComponent = $component->addComponent($find, 'recaptchaAliased', $this->getComponentProperties($component));
         }
 
         if ($recaptchaComponent) {
-            $recaptchaComponent->bindModel($this->getComponentModel($component));
+            $model = $this->getComponentModel($component);
+            if ($model) {
+                $recaptchaComponent->bindModel($model);
+            } else {
+                $recaptchaComponent->bindRequest();
+            }
         }
     }
 
@@ -71,5 +82,15 @@ abstract class AbstractEventHandler
     {
         [$owner, $plugin] = explode('\\', get_class($this));
         return implode('\\', [$owner, $plugin, 'Components', 'Recaptcha']);
+    }
+
+    protected function getRecaptchaSessionKey(): string
+    {
+        return 'recaptcha_' . md5(get_class($this));
+    }
+
+    protected function getComponentProperties($component): array
+    {
+        return [];
     }
 }

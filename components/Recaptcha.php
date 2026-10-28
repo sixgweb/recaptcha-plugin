@@ -95,9 +95,9 @@ class Recaptcha extends ComponentBase
      */
     public function addScripts(): void
     {
-        if ($this->getPassed() || $this->getVersion() == 'v3') {
+        /*if ($this->getPassed() || $this->getVersion() == 'v3') {
             return;
-        }
+        }*/
 
         if (version_compare(\System::VERSION, '3.0', '>=') && version_compare(\System::VERSION, '4.0', '<')) {
             $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha-oc3.js');
@@ -140,6 +140,17 @@ class Recaptcha extends ComponentBase
         $model->bindEvent('model.afterSave', function () use ($model) {
             Session::forget($this->getSessionKey());
         });
+    }
+
+    public function bindRequest()
+    {
+        if (Request::ajax() || Request::isMethod('post')) {
+            $data = Request::validate([
+                'g-recaptcha-response' => 'required|string'
+            ], messages: [
+                'g-recaptcha-response.required' => 'Please complete the reCaptcha challenge before submitting the form.'
+            ]);
+        }
     }
 
     public function onCheckRecaptcha()
@@ -302,6 +313,9 @@ class Recaptcha extends ComponentBase
 
     protected function getSessionKey()
     {
+        if ($this->model) {
+            return strtolower(str_replace('\\', '.', get_class($this->model))) . '.passed';
+        }
         return strtolower(str_replace('\\', '.', get_class($this))) . '.passed';
     }
 }
