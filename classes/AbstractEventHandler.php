@@ -5,6 +5,7 @@ namespace Sixgweb\Recaptcha\Classes;
 use App;
 use Event;
 use October\Rain\Database\Model;
+use Sixgweb\Recaptcha\Models\Settings;
 
 abstract class AbstractEventHandler
 {
@@ -91,6 +92,8 @@ abstract class AbstractEventHandler
 
     protected function getComponentProperties($component): array
     {
-        return [];
+        return [
+            'useSession' => Settings::get('version', 'v3') == 'v2',
+        ];
     }
 }

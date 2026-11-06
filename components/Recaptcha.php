@@ -95,15 +95,17 @@ class Recaptcha extends ComponentBase
      */
     public function addScripts(): void
     {
-        /*if ($this->getPassed() || $this->getVersion() == 'v3') {
+        //Plugin.php adds the necessary scripts for reCaptcha v3, so we only need to add scripts for v2 here
+        if ($this->getVersion() == 'v3') {
             return;
-        }*/
+        }
 
         if (version_compare(\System::VERSION, '3.0', '>=') && version_compare(\System::VERSION, '4.0', '<')) {
             $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha-oc3.js');
         } else {
             $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
         }
+
         $this->addJs('https://www.google.com/recaptcha/api.js?onload=recaptchaOnLoad');
     }
 
@@ -231,7 +233,7 @@ class Recaptcha extends ComponentBase
      */
     public function getPassed(): bool
     {
-        if ($this->property('useSession') && Session::has($this->getSessionKey())) {
+        if ($this->property('useSession', false) && Session::has($this->getSessionKey())) {
             $this->passed = true;
         }
         return $this->passed;
