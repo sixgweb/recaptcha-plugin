@@ -1,3 +1,4 @@
 1.0.1: First version of Recaptcha
 1.0.2: Add passed event and access to bound model
 1.0.3: License and readme creation
+1.0.4: Single-use session passes, verified tokens for model-less integrations, v3 hostname/action checks, scripts only on reCaptcha pages

@@ -2,11 +2,14 @@
 
 namespace Sixgweb\Recaptcha\Components;
 
+use Log;
+use Lang;
 use Model;
 use Event;
 use Config;
 use Request;
 use Session;
+use WeakMap;
 use ValidationException;
 use ReCaptcha\ReCaptcha as RecaptchaValidator;
 use Cms\Classes\ComponentBase;
@@ -17,6 +20,11 @@ use Sixgweb\Recaptcha\Models\Settings;
  */
 class Recaptcha extends ComponentBase
 {
+    /**
+     * Seconds a stored session pass (from onCheckRecaptcha) stays valid.
+     */
+    public const SESSION_PASS_TTL = 600;
+
     protected $model;
     protected $passed = false;
     protected $version;
@@ -25,6 +33,19 @@ class Recaptcha extends ComponentBase
     protected $theme;
     protected $sitekey;
     protected $errorCodes = [];
+
+    /**
+     * Models whose validation events are already bound to this component.
+     */
+    protected ?WeakMap $boundModels = null;
+
+    /**
+     * Token hashes verified with Google during this request, shared across components
+     * so the same token is never sent to Google twice (Google rejects duplicates).
+     *
+     * @var array<string, bool>
+     */
+    protected static array $verifiedTokens = [];
 
     /**
      * Component Details
@@ -85,83 +106,110 @@ class Recaptcha extends ComponentBase
         $this->method = Settings::get('method', 'checkbox');
         $this->theme = Settings::get('theme', 'light');
         $this->size = $this->method == 'invisible' ? 'invisible' : Settings::get('size', 'normal');
-        $this->sitekey = Settings::get('site_key');
+        $this->sitekey = (string) Settings::get('site_key');
     }
 
     /**
-     * Add reCaptcha scripts
+     * Add reCaptcha scripts. Only pages that use a reCaptcha component load them.
      *
      * @return void
      */
     public function addScripts(): void
     {
-        //Plugin.php adds the necessary scripts for reCaptcha v3, so we only need to add scripts for v2 here
+        //Works with the October 3.x and 4.x AJAX frameworks (oc.ajax, oc.request, render events)
+        $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
+
+        $query = ['onload' => 'recaptchaOnLoad'];
+
         if ($this->getVersion() == 'v3') {
-            return;
+            $query['render'] = $this->getSiteKey();
         }
 
-        if (version_compare(\System::VERSION, '3.0', '>=') && version_compare(\System::VERSION, '4.0', '<')) {
-            $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha-oc3.js');
-        } else {
-            $this->addJs('/plugins/sixgweb/recaptcha/assets/js/recaptcha.js');
-        }
-
-        $this->addJs('https://www.google.com/recaptcha/api.js?onload=recaptchaOnLoad');
+        $this->addJs('https://www.google.com/recaptcha/api.js?' . http_build_query($query));
     }
 
     /**
-     * Add events and validation rules to integrated model
+     * Require a valid reCaptcha whenever the integrated model validates.
      *
-     * @param [type] $model
+     * @param \October\Rain\Database\Model $model
      * @return void
      */
     public function bindModel($model): void
     {
         $this->model = $model;
+        $this->boundModels ??= new WeakMap;
 
-        $model->bindEvent('model.afterValidate', function () use ($model) {
-            if ($this->getPassed()) {
-                return;
-            }
+        if (isset($this->boundModels[$model])) {
+            return;
+        }
 
-            if (!$response = post('g-recaptcha-response', null)) {
-                throw new ValidationException([0 => 'Please complete the reCaptcha challenge before submitting the form.']);
-            }
+        $this->boundModels[$model] = true;
 
-            if ($this->checkRecaptcha($response)) {
-                return;
-            } else {
-                if ($this->getVersion() == 'v2') {
-                    throw new ValidationException([0 => 'ReCaptcha Response Invalid.  Code:' . implode(' | ', $this->errorCodes)]);
-                } else {
-                    throw new ValidationException([0 => 'ReCaptcha Score Too Low']);
-                }
-            }
-        });
-
-        $model->bindEvent('model.afterSave', function () use ($model) {
-            Session::forget($this->getSessionKey());
+        $model->bindEvent('model.afterValidate', function () {
+            $this->verifyOrFail();
         });
     }
 
-    public function bindRequest()
+    /**
+     * Require a valid reCaptcha for the current request when there is no model to bind.
+     *
+     * @return void
+     */
+    public function bindRequest(): void
     {
-        if (Request::ajax() || Request::isMethod('post')) {
-            $data = Request::validate([
-                'g-recaptcha-response' => 'required|string'
-            ], messages: [
-                'g-recaptcha-response.required' => 'Please complete the reCaptcha challenge before submitting the form.'
-            ]);
+        $this->verifyOrFail();
+    }
+
+    /**
+     * Pass if this request already passed, a stored session pass exists, or the
+     * posted token verifies with Google. Throws a ValidationException otherwise.
+     *
+     * @return void
+     * @throws ValidationException
+     */
+    public function verifyOrFail(): void
+    {
+        if ($this->passed) {
+            return;
+        }
+
+        if ($this->consumeSessionPass()) {
+            $this->passed = true;
+            return;
+        }
+
+        $token = post('g-recaptcha-response');
+
+        if (!is_string($token) || $token === '') {
+            throw new ValidationException(['g-recaptcha-response' => Lang::get('sixgweb.recaptcha::lang.required')]);
+        }
+
+        if (!$this->checkRecaptcha($token)) {
+            throw new ValidationException(['g-recaptcha-response' => Lang::get('sixgweb.recaptcha::lang.invalid')]);
         }
     }
 
+    /**
+     * AJAX handler for the v2 checkbox callback. Verifies the token and stores a
+     * single-use session pass so the widget can be removed from the form.
+     *
+     * @return array|false|null
+     */
     public function onCheckRecaptcha()
     {
-        if ($response = post('g-recaptcha-response', null)) {
-            if ($this->property('useSession')) {
-                return $this->checkRecaptcha($response) ? ['recaptchaId' => $this->alias . 'RecaptchaContainer'] : false;
-            }
+        if (!$this->property('useSession')) {
+            return null;
         }
+
+        $token = post('g-recaptcha-response');
+
+        if (!is_string($token) || $token === '' || !$this->checkRecaptcha($token)) {
+            return false;
+        }
+
+        $this->storeSessionPass();
+
+        return ['recaptchaId' => $this->alias . 'RecaptchaContainer'];
     }
 
     /**
@@ -227,16 +275,22 @@ class Recaptcha extends ComponentBase
     }
 
     /**
-     * Get recaptcha passed
+     * Whether the reCaptcha has passed for this request or has an unused session pass.
+     * Does not consume the session pass, so it is safe to call from templates.
      *
-     * @return string
+     * @return bool
      */
     public function getPassed(): bool
     {
-        if ($this->property('useSession', false) && Session::has($this->getSessionKey())) {
-            $this->passed = true;
+        if ($this->passed) {
+            return true;
         }
-        return $this->passed;
+
+        if (!$this->property('useSession', false)) {
+            return false;
+        }
+
+        return $this->isFreshPass(Session::get($this->getSessionKey()));
     }
 
     public function getModel(): ?Model
@@ -245,7 +299,7 @@ class Recaptcha extends ComponentBase
     }
 
     /**
-     * Set passed property
+     * Set passed property, storing a single-use session pass when enabled.
      *
      * @param boolean $passed
      * @return void
@@ -255,8 +309,8 @@ class Recaptcha extends ComponentBase
         Session::forget($this->getSessionKey());
         $this->passed = $passed;
 
-        if ($this->property('useSession')) {
-            Session::put($this->getSessionKey(), 1);
+        if ($passed) {
+            $this->storeSessionPass();
         }
     }
 
@@ -279,45 +333,127 @@ class Recaptcha extends ComponentBase
     }
 
     /**
-     * Set passed property, captcha_errors and return boolean
+     * Verify a token with Google. Sets the in-request passed flag on success.
+     * Does not store a session pass; only onCheckRecaptcha does that.
      *
-     * @param [type] $value
+     * @param string $value
      * @return boolean
      */
     public function checkRecaptcha($value): bool
     {
-        //For events firing more than once
-        if ($this->getPassed()) {
+        if ($this->passed) {
             return true;
         }
 
-        $ip = Request::ip();
-        $recaptcha = new RecaptchaValidator(Settings::get('secret_key'));
+        if (!is_string($value) || $value === '') {
+            return false;
+        }
+
+        $tokenHash = hash('sha256', $value);
+
+        if (isset(static::$verifiedTokens[$tokenHash])) {
+            $this->passed = true;
+            return true;
+        }
+
+        $recaptcha = (new RecaptchaValidator((string) Settings::get('secret_key')))
+            ->setExpectedHostname(Request::getHost());
 
         if ($this->getVersion() == 'v3') {
-            $recaptcha = $recaptcha->setScoreThreshold(Settings::get('score', 0.5));
+            $recaptcha = $recaptcha
+                ->setScoreThreshold((float) Settings::get('score', 0.5))
+                ->setExpectedAction($this->getExpectedAction());
         }
 
-        $response = $recaptcha->verify(
-            $value,
-            $ip
-        );
+        $response = $recaptcha->verify($value, Request::ip());
 
         if ($response->isSuccess()) {
-            $this->setPassed(true);
+            static::$verifiedTokens[$tokenHash] = true;
+            $this->passed = true;
             Event::fire('sixgweb.recaptcha.passed', [$this]);
             return true;
-        } else {
-            $this->errorCodes = $response->getErrorCodes();
-            return false;
+        }
+
+        $this->errorCodes = $response->getErrorCodes();
+
+        Log::info('reCaptcha verification failed', [
+            'component' => static::class,
+            'alias' => $this->alias,
+            'errorCodes' => $this->errorCodes,
+            'score' => $response->getScore(),
+            'action' => $response->getAction(),
+            'hostname' => $response->getHostname(),
+        ]);
+
+        return false;
+    }
+
+    /**
+     * The v3 action the browser sends: the AJAX handler name (letters only), or "submit".
+     * Must match the action built in assets/js/recaptcha.js. October 4.x sends the
+     * handler in X-AJAX-HANDLER, October 3.x in X-OCTOBER-REQUEST-HANDLER.
+     *
+     * @return string
+     */
+    protected function getExpectedAction(): string
+    {
+        $handler = '';
+
+        if (Request::ajax()) {
+            $handler = (string) (Request::header('X-AJAX-HANDLER') ?: Request::header('X-OCTOBER-REQUEST-HANDLER'));
+        }
+
+        $action = preg_replace('/[^a-z]/i', '', $handler);
+
+        return $action !== '' ? $action : 'submit';
+    }
+
+    /**
+     * Store a single-use pass in the session, if sessions are enabled for this component.
+     *
+     * @return void
+     */
+    protected function storeSessionPass(): void
+    {
+        if ($this->property('useSession')) {
+            Session::put($this->getSessionKey(), time());
         }
     }
 
-    protected function getSessionKey()
+    /**
+     * Remove the session pass and return whether it was present and still fresh.
+     *
+     * @return bool
+     */
+    protected function consumeSessionPass(): bool
     {
-        if ($this->model) {
-            return strtolower(str_replace('\\', '.', get_class($this->model))) . '.passed';
+        if (!$this->property('useSession')) {
+            return false;
         }
-        return strtolower(str_replace('\\', '.', get_class($this))) . '.passed';
+
+        return $this->isFreshPass(Session::pull($this->getSessionKey()));
+    }
+
+    /**
+     * @param mixed $passedAt Unix timestamp stored by storeSessionPass()
+     * @return bool
+     */
+    protected function isFreshPass($passedAt): bool
+    {
+        return is_int($passedAt) && (time() - $passedAt) <= static::SESSION_PASS_TTL;
+    }
+
+    /**
+     * Session key for this component on this page. Built from server-side values only,
+     * so the v2 callback request and the form submit share the same key.
+     *
+     * @return string
+     */
+    protected function getSessionKey(): string
+    {
+        $page = $this->controller ? $this->controller->getPage() : null;
+        $pageName = $page ? (string) $page->getBaseFileName() : '';
+
+        return 'sixgweb.recaptcha.passed.' . md5($pageName . '|' . $this->alias);
     }
 }
